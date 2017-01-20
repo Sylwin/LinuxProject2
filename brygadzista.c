@@ -12,13 +12,12 @@
 #include <sys/un.h>
 #include <signal.h>
 
-#define BUFFER_SIZE 12
-
 struct sockaddr_in publicChannel;
 int numberOfWorkers;
 char message[50];
 timer_t intervalTimerId;
 struct itimerspec sendMsgTimer;
+pid_t groupLeaderPID;
 
 void error(const char *msg)
 {
@@ -30,7 +29,8 @@ void sigHandler(int sig)
 {
     if( timer_settime(intervalTimerId, 0, &sendMsgTimer, NULL) == -1 )
         perror("timer_settime3");
-    printf("lol\n");
+    killpg(groupLeaderPID, SIGALRM);
+    //printf("lol\n");
 }
 
 int main(int argc, char* argv[])
@@ -41,8 +41,8 @@ int main(int argc, char* argv[])
     struct sockaddr_un name;
     int data_socket;
     int ret;
-    pid_t groupLeaderPID;
     pid_t f;
+    pid_t grpPid;
     int grp;
 
     while( (opt = getopt(argc, argv, ":a:n:c:t:")) != -1 )
@@ -115,12 +115,13 @@ int main(int argc, char* argv[])
     if(ret==-1)
         error("write");
 
+    //printf("brygadzista gid: %d\n", getpgrp());
     groupLeaderPID = fork();
-    printf("groupleader PID: %d\n", groupLeaderPID);
+    printf("groupLeader PID: %d\n", groupLeaderPID);
 
     if(groupLeaderPID == -1)
         error("fork1");
-    else if(groupLeaderPID == 0)     //child
+    else if(groupLeaderPID == 0)
     {
         grp = setpgrp();
         if(grp == -1)
@@ -129,22 +130,29 @@ int main(int argc, char* argv[])
         for(int i = 0; i < numberOfWorkers; i++)
         {
             //tworzymy robotnikow
-            if( ( f = fork() ) == 0)
+            char *newArgs[] = { (char *) 0 };
+            if( fork() == 0)
             {
-                printf("[son] pid %d from pid %d\n", getpid(), getpgrp());
-                exit(0);
+                execvp("./robotnik.o", newArgs);
+                //grpPid = getpgrp();
+                //printf("[son] pid %d from pid %d\n", getpid(), grpPid);
+                exit(1);
             }
         }
+        exit(1);
     }
-    else        //rodzic - brygadzista
+    else
     {
         printf("brygadzista pid: %d\n", getpid());
     }
 
-//    printf("brygadzista pid: %d\n", getpid());
-   // if( kill(getpid()
     while(1)
     {
+        if( kill(getpid(), 0) == ESRCH )
+        {
+            kill(-grpPid, SIGTERM);
+            exit(0);
+        }
         pause();
     }
 
