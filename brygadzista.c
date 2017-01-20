@@ -1,7 +1,9 @@
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <string.h>
 #include <errno.h>
 #include <netinet/in.h>
@@ -18,6 +20,8 @@ char message[50];
 timer_t intervalTimerId;
 struct itimerspec sendMsgTimer;
 pid_t groupLeaderPID;
+int fd;
+char *brygadaChannel = "brygadaChannel";
 
 void error(const char *msg)
 {
@@ -37,7 +41,7 @@ int main(int argc, char* argv[])
 {
     int opt;
     float time = 0;
-    char socketName[50];
+    char registerChannelName[50];
     struct sockaddr_un name;
     int data_socket;
     int ret;
@@ -45,12 +49,12 @@ int main(int argc, char* argv[])
     pid_t grpPid;
     int grp;
 
-    while( (opt = getopt(argc, argv, ":a:n:c:t:")) != -1 )
+    while( (opt = getopt(argc, argv, "a:n:c:t:")) != -1 )
     {
         switch(opt)
         {
         case 'a':
-            strcpy(socketName, optarg);
+            strcpy(registerChannelName, optarg);
             break;
         case 'n':
             numberOfWorkers = strtof(optarg,NULL);
@@ -63,9 +67,6 @@ int main(int argc, char* argv[])
             sendMsgTimer.it_value.tv_sec = floor(time);
             sendMsgTimer.it_value.tv_nsec = (time - floor(time))*1000000000;
             break;
-        case ':':
-            fprintf(stderr, "%s: option '-%c' requires an argument\n", argv[0], optopt);
-            break;
         case '?':
         default:
             fprintf(stderr, "%s: option '-%c' is invalid: ignored\n", argv[0], optopt);
@@ -73,6 +74,8 @@ int main(int argc, char* argv[])
         }
     }
 
+   
+//----------------------------------------------------
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = &sigHandler;
@@ -91,11 +94,17 @@ int main(int argc, char* argv[])
     if( timer_settime(intervalTimerId, 0, &sendMsgTimer, NULL) == -1 )
         perror("timer_settime1");
 
+//----------------------------------------------------
    // printf("Message: %s\n", message);
    // printf("Time: %ld, %ld\n", sendMsgTimer.it_value.tv_sec, sendMsgTimer.it_value.tv_nsec);
    // printf("Number of workers: %d\n", numberOfWorkers);
    // printf("Address: %ud\n", publicChannel.sin_addr.s_addr);
-
+//----------------------------------------------------
+    //mkfifo(brygadaChannel, 0666);
+    fd = open(brygadaChannel, O_WRONLY | O_NONBLOCK);
+    write(fd, message, sizeof(message));
+//----------------------------------------------------
+    //publiczny socket Brygadzista <-> Archiwista
     data_socket = socket(AF_UNIX, SOCK_STREAM, 0);
     if(data_socket == -1)
         error("socket");
@@ -103,19 +112,17 @@ int main(int argc, char* argv[])
     memset(&name, 0, sizeof(struct sockaddr_un));
 
     name.sun_family = AF_UNIX;
-    strncpy(name.sun_path, socketName, sizeof(name.sun_path)-1);
+    strncpy(name.sun_path, registerChannelName, sizeof(name.sun_path)-1);
 
     ret = connect(data_socket, (const struct sockaddr *)&name, sizeof(struct sockaddr_un));
     if(ret == -1)
         error("connect");
 
-   // strcpy(buffer, "hello world");
-
     ret = write(data_socket, message, strlen(message)+1);
     if(ret==-1)
         error("write");
+//----------------------------------------------------
 
-    //printf("brygadzista gid: %d\n", getpgrp());
     groupLeaderPID = fork();
     printf("groupLeader PID: %d\n", groupLeaderPID);
 
@@ -133,9 +140,11 @@ int main(int argc, char* argv[])
             char *newArgs[] = { (char *) 0 };
             if( fork() == 0)
             {
+                //printf("dupa\n");
                 execvp("./robotnik.o", newArgs);
                 //grpPid = getpgrp();
                 //printf("[son] pid %d from pid %d\n", getpid(), grpPid);
+                //printf("dupa\n");
                 exit(1);
             }
         }
@@ -145,17 +154,19 @@ int main(int argc, char* argv[])
     {
         printf("brygadzista pid: %d\n", getpid());
     }
+//----------------------------------------------------
 
     while(1)
     {
         if( kill(getpid(), 0) == ESRCH )
         {
-            kill(-grpPid, SIGTERM);
+            killpg(groupLeaderPID, SIGTERM);
             exit(0);
         }
         pause();
     }
-
+   // close(fd);
+   // unlink(brygadaChannel);
     return 0;
 }
 
