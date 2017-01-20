@@ -10,12 +10,15 @@
 #include <time.h>
 #include <math.h>
 #include <sys/un.h>
+#include <signal.h>
 
 #define BUFFER_SIZE 12
 
 struct sockaddr_in publicChannel;
 int numberOfWorkers;
 char message[50];
+timer_t intervalTimerId;
+struct itimerspec sendMsgTimer;
 
 void error(const char *msg)
 {
@@ -23,15 +26,24 @@ void error(const char *msg)
     exit(1);
 }
 
+void sigHandler(int sig)
+{
+    if( timer_settime(intervalTimerId, 0, &sendMsgTimer, NULL) == -1 )
+        perror("timer_settime3");
+    printf("lol\n");
+}
+
 int main(int argc, char* argv[])
 {
     int opt;
-    struct itimerspec sendMsgTimer;
     float time = 0;
     char socketName[50];
     struct sockaddr_un name;
     int data_socket;
     int ret;
+    pid_t groupLeaderPID;
+    pid_t f;
+    int grp;
 
     while( (opt = getopt(argc, argv, ":a:n:c:t:")) != -1 )
     {
@@ -61,6 +73,24 @@ int main(int argc, char* argv[])
         }
     }
 
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = &sigHandler;
+    sigemptyset(&sa.sa_mask);
+    if( sigaction(SIGALRM, &sa, NULL) == -1 )
+        perror("sigaction");
+
+    struct sigevent se;
+    memset(&se, 0, sizeof(se));
+    se.sigev_notify = SIGEV_SIGNAL;
+    se.sigev_signo = SIGALRM;
+    se.sigev_value.sival_ptr = &intervalTimerId;
+    if( timer_create(CLOCK_REALTIME, &se, &intervalTimerId) == -1 )
+        perror("timer_create1");
+
+    if( timer_settime(intervalTimerId, 0, &sendMsgTimer, NULL) == -1 )
+        perror("timer_settime1");
+
    // printf("Message: %s\n", message);
    // printf("Time: %ld, %ld\n", sendMsgTimer.it_value.tv_sec, sendMsgTimer.it_value.tv_nsec);
    // printf("Number of workers: %d\n", numberOfWorkers);
@@ -84,6 +114,39 @@ int main(int argc, char* argv[])
     ret = write(data_socket, message, strlen(message)+1);
     if(ret==-1)
         error("write");
+
+    groupLeaderPID = fork();
+    printf("groupleader PID: %d\n", groupLeaderPID);
+
+    if(groupLeaderPID == -1)
+        error("fork1");
+    else if(groupLeaderPID == 0)     //child
+    {
+        grp = setpgrp();
+        if(grp == -1)
+            error("setpgrp");
+
+        for(int i = 0; i < numberOfWorkers; i++)
+        {
+            //tworzymy robotnikow
+            if( ( f = fork() ) == 0)
+            {
+                printf("[son] pid %d from pid %d\n", getpid(), getpgrp());
+                exit(0);
+            }
+        }
+    }
+    else        //rodzic - brygadzista
+    {
+        printf("brygadzista pid: %d\n", getpid());
+    }
+
+//    printf("brygadzista pid: %d\n", getpid());
+   // if( kill(getpid()
+    while(1)
+    {
+        pause();
+    }
 
     return 0;
 }
