@@ -34,7 +34,6 @@ void sigHandler(int sig)
     if( timer_settime(intervalTimerId, 0, &sendMsgTimer, NULL) == -1 )
         perror("timer_settime3");
     killpg(groupLeaderPID, SIGALRM);
-    //printf("lol\n");
 }
 
 int main(int argc, char* argv[])
@@ -43,13 +42,13 @@ int main(int argc, char* argv[])
     float time = 0;
     char registerChannelName[50];
     struct sockaddr_un name;
-    int data_socket;
+    int sockfd;
     int ret;
     pid_t f;
     pid_t grpPid;
     int grp;
 
-    while( (opt = getopt(argc, argv, "a:n:c:t:")) != -1 )
+    while( (opt = getopt(argc, argv, "a:n:c:t:i:")) != -1 )
     {
         switch(opt)
         {
@@ -67,6 +66,8 @@ int main(int argc, char* argv[])
             sendMsgTimer.it_value.tv_sec = floor(time);
             sendMsgTimer.it_value.tv_nsec = (time - floor(time))*1000000000;
             break;
+        case 'i':
+            break;
         case '?':
         default:
             fprintf(stderr, "%s: option '-%c' is invalid: ignored\n", argv[0], optopt);
@@ -74,8 +75,65 @@ int main(int argc, char* argv[])
         }
     }
 
-   
+    if( argc < 5 )
+    {
+        printf("Usage: ./brygadzista -aSTRING -nINT -cSTRING -tFLOAT\n");
+        exit(0);
+    }
+
 //----------------------------------------------------
+    //publiczny socket Brygadzista <-> Archiwista
+    sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if(sockfd == -1)
+        error("socket");
+    memset(&name, 0, sizeof(struct sockaddr_un));
+
+    name.sun_family = AF_UNIX;
+    strncpy(name.sun_path, registerChannelName, sizeof(name.sun_path)-1);
+
+    ret = connect(sockfd, (const struct sockaddr *)&name, sizeof(struct sockaddr_un));
+    if(ret == -1)
+        error("connect");
+
+    ret = write(sockfd, message, strlen(message)+1);
+    if(ret==-1)
+        error("write");
+//----------------------------------------------------
+    int fd[2];
+    pipe(fd);
+
+    groupLeaderPID = fork();
+    printf("groupLeader PID: %d\n", groupLeaderPID);
+
+    if(groupLeaderPID == -1)
+        error("fork1");
+    else if(groupLeaderPID == 0)
+    {
+        grp = setpgrp();
+        if(grp == -1)
+            error("setpgrp");
+
+        for(int i = 0; i < numberOfWorkers; i++)
+        {
+            //tworzymy robotnikow
+            char *newArgs[] = { (char *) 0 };
+            if( fork() == 0)
+            {
+                dup2(fd[0],0);
+                close(fd[1]);
+                execvp("./robotnik.o", newArgs);
+                exit(1);
+            }
+        }
+        exit(1);
+    }
+    else
+    {
+        printf("brygadzista pid: %d\n", getpid());
+        write(fd[1], message, sizeof(message)+1);
+    }
+//----------------------------------------------------
+
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = &sigHandler;
@@ -95,66 +153,6 @@ int main(int argc, char* argv[])
         perror("timer_settime1");
 
 //----------------------------------------------------
-   // printf("Message: %s\n", message);
-   // printf("Time: %ld, %ld\n", sendMsgTimer.it_value.tv_sec, sendMsgTimer.it_value.tv_nsec);
-   // printf("Number of workers: %d\n", numberOfWorkers);
-   // printf("Address: %ud\n", publicChannel.sin_addr.s_addr);
-//----------------------------------------------------
-    //mkfifo(brygadaChannel, 0666);
-    fd = open(brygadaChannel, O_WRONLY | O_NONBLOCK);
-    write(fd, message, sizeof(message));
-//----------------------------------------------------
-    //publiczny socket Brygadzista <-> Archiwista
-    data_socket = socket(AF_UNIX, SOCK_STREAM, 0);
-    if(data_socket == -1)
-        error("socket");
-
-    memset(&name, 0, sizeof(struct sockaddr_un));
-
-    name.sun_family = AF_UNIX;
-    strncpy(name.sun_path, registerChannelName, sizeof(name.sun_path)-1);
-
-    ret = connect(data_socket, (const struct sockaddr *)&name, sizeof(struct sockaddr_un));
-    if(ret == -1)
-        error("connect");
-
-    ret = write(data_socket, message, strlen(message)+1);
-    if(ret==-1)
-        error("write");
-//----------------------------------------------------
-
-    groupLeaderPID = fork();
-    printf("groupLeader PID: %d\n", groupLeaderPID);
-
-    if(groupLeaderPID == -1)
-        error("fork1");
-    else if(groupLeaderPID == 0)
-    {
-        grp = setpgrp();
-        if(grp == -1)
-            error("setpgrp");
-
-        for(int i = 0; i < numberOfWorkers; i++)
-        {
-            //tworzymy robotnikow
-            char *newArgs[] = { (char *) 0 };
-            if( fork() == 0)
-            {
-                //printf("dupa\n");
-                execvp("./robotnik.o", newArgs);
-                //grpPid = getpgrp();
-                //printf("[son] pid %d from pid %d\n", getpid(), grpPid);
-                //printf("dupa\n");
-                exit(1);
-            }
-        }
-        exit(1);
-    }
-    else
-    {
-        printf("brygadzista pid: %d\n", getpid());
-    }
-//----------------------------------------------------
 
     while(1)
     {
@@ -165,8 +163,7 @@ int main(int argc, char* argv[])
         }
         pause();
     }
-   // close(fd);
-   // unlink(brygadaChannel);
+
     return 0;
 }
 

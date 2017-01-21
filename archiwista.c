@@ -18,6 +18,7 @@ void error(const char *msg)
 }
 
 struct sockaddr_in publicChannel;
+int brigadeId = 0;
 
 int main(int argc, char* argv[])
 {
@@ -44,6 +45,12 @@ int main(int argc, char* argv[])
         }
     }
 
+    if( argc < 2 )
+    {
+        printf("Usage: ./archiwista.o -aSTRING\n");
+        exit(0);
+    }
+//------------------------------------------------------------
     unlink(registerChannelName);
 
     sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -59,6 +66,7 @@ int main(int argc, char* argv[])
         error("bind");
 
     listen(sockfd, 10);
+//------------------------------------------------------------
     while(1)
     {
         data_socket = accept(sockfd, NULL, NULL);
@@ -68,8 +76,8 @@ int main(int argc, char* argv[])
         ret = read(data_socket, buffer, BUFFER_SIZE);
         if(ret==-1)
             error("read");
-
-        printf("Here is the message: %s\n", buffer);
+        brigadeId++;
+        printf("From brigade nr: %d, message: %s\n", brigadeId, buffer);
     }
 
     return 0;
