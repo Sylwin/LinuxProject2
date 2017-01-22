@@ -8,6 +8,8 @@
 #include <arpa/inet.h>
 #include <stdlib.h>
 #include <sys/un.h>
+#include <netinet/udp.h>
+
 
 void error(const char *msg)
 {
@@ -113,7 +115,7 @@ int main(int argc, char* argv[])
                 error("binds");
             printf("bind with: %s\n", path);
             char msg[50];
-            if( recv(socks[i], msg, 1, 0) == -1 )
+            if( read(socks[i], msg, 1) == -1 )
                 error("receive");
             printf("receive: %s\n", msg);
         }
