@@ -63,7 +63,6 @@ int main(int argc, char* argv[])
             break;
         case 'i':
             strcpy(id, optarg);
-//            id = atoi(optarg);
             break;
         case '?':
         default:
@@ -98,16 +97,20 @@ int main(int argc, char* argv[])
         error("write");
     close(sockfd);
 //----------------------------------------------------
-   // struct sockaddr_un brygArch;
-   // memset(&brygArch, 0, sizeof(struct sockaddr_un));
-   // brygArch.sun_family = AF_UNIX;
-   // strcpy(brygArch.sun_path, id);
-   // printf("brygada id: %s\n", id);
-   // int new = socket(AF_UNIX, SOCK_STREAM, 0);
-   // if(new == -1)
-   //     error("socket");
-   // if(connect(new, (const struct sockaddr *)&brygArch, sizeof(struct sockaddr_un)) == -1)
-   //     error("connect2");
+    struct sockaddr_un brygArch;
+    memset(&brygArch, 0, sizeof(struct sockaddr_un));
+    brygArch.sun_family = AF_UNIX;
+    strcpy(brygArch.sun_path, id);
+    printf("brygada id: %s\n", id);
+    int new = socket(AF_UNIX, SOCK_STREAM, 0);
+    if(new == -1)
+        error("socket");
+    if(connect(new, (const struct sockaddr *)&brygArch, sizeof(struct sockaddr_un)) == -1)
+        error("connect2");
+    int tmp = htonl(numberOfWorkers);
+    if( write(new, &numberOfWorkers, 1) == -1 )
+        error("write");
+
 //----------------------------------------------------
 
     int fd[2];
@@ -179,4 +182,3 @@ int main(int argc, char* argv[])
 
     return 0;
 }
-

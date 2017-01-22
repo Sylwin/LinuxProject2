@@ -60,64 +60,64 @@ int main(int argc, char* argv[])
 
     listen(sockfd, 10);
 //------------------------------------------------------------
-    //int socks[20];
+    int socks[20];
 
-while(1)
-{
-    registerSocket = accept(sockfd, NULL, NULL);
-    if( registerSocket == -1 )
-        error("accept");
+    while(1)
+    {
+        registerSocket = accept(sockfd, NULL, NULL);
+        if( registerSocket == -1 )
+            error("accept");
 
-    ret = read(registerSocket, buffer, sizeof(buffer));
-    if(ret==-1)
-        error("read");
-    printf("brygada: %s\n", buffer);
+        ret = read(registerSocket, buffer, sizeof(buffer));
+        if(ret==-1)
+            error("read");
+        printf("brygada: %s\n", buffer);
 
-    unlink(buffer);
-    struct sockaddr_un addr;
-    memset(&addr, 0, sizeof(struct sockaddr_un));
-    addr.sun_family = AF_UNIX;
-    strcpy(addr.sun_path, buffer);
+        unlink(buffer);
+        struct sockaddr_un addr;
+        memset(&addr, 0, sizeof(struct sockaddr_un));
+        addr.sun_family = AF_UNIX;
+        strcpy(addr.sun_path, buffer);
 
-    int brygadzistaSock = socket(AF_UNIX, SOCK_STREAM, 0);
-    if( brygadzistaSock == -1)
-        error("brygadzistaSock");
-    if(bind(brygadzistaSock, (struct sockaddr *)&addr, sizeof(struct sockaddr_un)) == -1)
-        error("brygadzistaBind");
+        int brygadzistaSock = socket(AF_UNIX, SOCK_STREAM, 0);
+        if( brygadzistaSock == -1)
+            error("brygadzistaSock");
+        if(bind(brygadzistaSock, (struct sockaddr *)&addr, sizeof(struct sockaddr_un)) == -1)
+            error("brygadzistaBind");
+         printf("%s\n", buffer);
 
-   // int workers = buffer;
-   // for(int i = 1; i <= buffer; i++)
-   // {
-   //     char path[20];
-   //     struct sockaddr_un workerAddr;
-   //     memset(&workerAddr, 0, sizeof(struct sockaddr_un));
-   //     workerAddr.sun_family = AF_UNIX;
-   //     sprintf(path, "socket%d", workers--);
-   //     strcpy(workerAddr.sun_path, path);
-   //     socks[i] = socket(AF_UNIX, SOCK_DGRAM, 0);
-   //     unlink(path);
-   //     if(socks[i] == -1)
-   //         error("socks");
-   //     if( bind( socks[i], (struct sockaddr *)&workerAddr, sizeof(struct sockaddr_un)) == -1 )
-   //         error("binds");
-   //     printf("bind with: %s\n", path);
-   // }
+        listen(brygadzistaSock, 5);
 
-   //    // int socksData;
-   //    // socksData = accept(socks[i], NULL, NULL);
-   //    // if(socksData == -1)
-   //    //     error("accepts");
-   // //}
-   // listen(socks[0], 5);
-   // while(1)
-   // {
-   //     for(int i = 1; i <= buffer; i++)
-   //     {
-   //         int socksData = 0;
-   //         socksData = accept(&socks[i], NULL, NULL);
-   //         if(socksData == -1)
-   //             error("accepts");
-   //     }
+        int data = accept(brygadzistaSock, NULL, NULL);
+        if( data == -1 )
+            error("accept");
+        int number = 0;
+        read(data, &number, 1);
+        printf("number of workers: %d\n", number);
+
+        int workers = number;
+        for(int i = 1; i <= number; i++)
+        {
+            char path[20];
+            struct sockaddr_un workerAddr;
+            memset(&workerAddr, 0, sizeof(struct sockaddr_un));
+            workerAddr.sun_family = AF_UNIX;
+            sprintf(path, "socket%d", workers--);
+            strcpy(workerAddr.sun_path, path);
+            socks[i] = socket(AF_UNIX, SOCK_DGRAM, 0);
+            unlink(path);
+
+            if(socks[i] == -1)
+                error("socks");
+            if( bind( socks[i], (struct sockaddr *)&workerAddr, sizeof(struct sockaddr_un)) == -1 )
+                error("binds");
+            printf("bind with: %s\n", path);
+            char msg[50];
+            if( recv(socks[i], msg, 1, 0) == -1 )
+                error("receive");
+            printf("receive: %s\n", msg);
+        }
+
     }
 
     return 0;
