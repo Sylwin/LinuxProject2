@@ -14,8 +14,8 @@
 struct timespec sendTime;
 int ret;
 int sockfd;
+char name[20];
 
-#define SOCKET "/tmp/socks"
 
 void error(const char* msg)
 {
@@ -33,13 +33,28 @@ void sigHandler(int sig)
     char msg[20];
     sprintf(msg, "%c %ld.%9ld", buffer, sendTime.tv_sec, sendTime.tv_nsec);
     printf("%s\n", msg);
-//    ret = write(sockfd, msg, sizeof(msg));
-//    if( ret == -1 )
-//        error("write");
+    ret = write(sockfd, msg, sizeof(msg));
+    if( ret == -1 )
+        error("write");
 }
 
 int main(int argc, char* argv[])
 {
+    int opt;
+    while( (opt = getopt(argc, argv, "n:")) != -1 )
+    {
+        switch(opt)
+        {
+        case 'n':
+            strcpy(name, optarg);
+            break;
+        case '?':
+        default:
+            fprintf(stderr, "%s: option '-%c' is invalid: ignored\n", argv[0], optopt);
+            break;
+        }
+    }
+
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = &sigHandler;
@@ -47,20 +62,21 @@ int main(int argc, char* argv[])
     if( sigaction(SIGALRM, &sa, NULL) == -1 )
         perror("sigaction");
 
-    unlink(SOCKET);
-    struct sockaddr_un address;
-    sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if(sockfd == 1)
-        error("socket");
+    printf("socket name: %s\n", name);
 
+    struct sockaddr_un address;
     memset(&address, 0, sizeof(struct sockaddr_un));
 
     address.sun_family = AF_UNIX;
-    strcpy(address.sun_path, SOCKET);
+    strcpy(address.sun_path, name);
 
-//    ret = connect(sockfd, (const struct sockaddr*)&address, sizeof(struct sockaddr_un));
-//    if( ret == -1 )
-//        error("connect");
+    sockfd = socket(AF_UNIX, SOCK_DGRAM, 0);
+    if(sockfd == -1)
+        error("socket");
+
+    ret = connect(sockfd, (const struct sockaddr*)&address, sizeof(struct sockaddr_un));
+    if( ret == -1 )
+        error("connect11");
 
     while(1)
         pause();

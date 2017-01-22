@@ -14,14 +14,11 @@
 #include <sys/un.h>
 #include <signal.h>
 
-struct sockaddr_in publicChannel;
 int numberOfWorkers;
 char message[50];
 timer_t intervalTimerId;
 struct itimerspec sendMsgTimer;
 pid_t groupLeaderPID;
-int fd;
-char *brygadaChannel = "brygadaChannel";
 
 void error(const char *msg)
 {
@@ -41,12 +38,10 @@ int main(int argc, char* argv[])
     int opt;
     float time = 0;
     char registerChannelName[50];
-    struct sockaddr_un name;
     int sockfd;
     int ret;
-    pid_t f;
-    pid_t grpPid;
     int grp;
+    char id[20];
 
     while( (opt = getopt(argc, argv, "a:n:c:t:i:")) != -1 )
     {
@@ -67,6 +62,8 @@ int main(int argc, char* argv[])
             sendMsgTimer.it_value.tv_nsec = (time - floor(time))*1000000000;
             break;
         case 'i':
+            strcpy(id, optarg);
+//            id = atoi(optarg);
             break;
         case '?':
         default:
@@ -82,23 +79,37 @@ int main(int argc, char* argv[])
     }
 
 //----------------------------------------------------
-    //publiczny socket Brygadzista <-> Archiwista
+    //publiczny socket rejestrujacy
+    struct sockaddr_un name;
     sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
     if(sockfd == -1)
         error("socket");
     memset(&name, 0, sizeof(struct sockaddr_un));
 
     name.sun_family = AF_UNIX;
-    strncpy(name.sun_path, registerChannelName, sizeof(name.sun_path)-1);
+    strcpy(name.sun_path, registerChannelName);
 
     ret = connect(sockfd, (const struct sockaddr *)&name, sizeof(struct sockaddr_un));
     if(ret == -1)
-        error("connect");
+        error("connect1");
 
-    ret = write(sockfd, message, strlen(message)+1);
+    ret = write(sockfd, id, sizeof(id)+1);
     if(ret==-1)
         error("write");
+    close(sockfd);
 //----------------------------------------------------
+   // struct sockaddr_un brygArch;
+   // memset(&brygArch, 0, sizeof(struct sockaddr_un));
+   // brygArch.sun_family = AF_UNIX;
+   // strcpy(brygArch.sun_path, id);
+   // printf("brygada id: %s\n", id);
+   // int new = socket(AF_UNIX, SOCK_STREAM, 0);
+   // if(new == -1)
+   //     error("socket");
+   // if(connect(new, (const struct sockaddr *)&brygArch, sizeof(struct sockaddr_un)) == -1)
+   //     error("connect2");
+//----------------------------------------------------
+
     int fd[2];
     pipe(fd);
 
@@ -113,10 +124,12 @@ int main(int argc, char* argv[])
         if(grp == -1)
             error("setpgrp");
 
-        for(int i = 0; i < numberOfWorkers; i++)
+        for(int i = 1; i <= numberOfWorkers; i++)
         {
             //tworzymy robotnikow
-            char *newArgs[] = { (char *) 0 };
+            char socket[20];
+            sprintf(socket, "-nsocket%d", i);
+            char *newArgs[] = { "./robotnik.o", socket, (char *) 0 };
             if( fork() == 0)
             {
                 dup2(fd[0],0);

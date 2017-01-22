@@ -9,26 +9,19 @@
 #include <stdlib.h>
 #include <sys/un.h>
 
-#define BUFFER_SIZE 256
-
 void error(const char *msg)
 {
     perror(msg);
     exit(1);
 }
 
-struct sockaddr_in publicChannel;
-int brigadeId = 0;
-
 int main(int argc, char* argv[])
 {
     int sockfd;
-    struct sockaddr_un name;
-    int result;
-    char buffer[BUFFER_SIZE];
+    char buffer[20];
     int opt;
     char registerChannelName[50];
-    int data_socket;
+    int registerSocket;
     int ret;
 
     while( (opt = getopt(argc, argv, "a:")) != -1 )
@@ -52,33 +45,81 @@ int main(int argc, char* argv[])
     }
 //------------------------------------------------------------
     unlink(registerChannelName);
-
-    sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if( sockfd == -1 )
-        error("socket");
-
+    struct sockaddr_un name;
     memset(&name, 0, sizeof(struct sockaddr_un));
 
     name.sun_family = AF_UNIX;
     strncpy(name.sun_path, registerChannelName, sizeof(name.sun_path)-1);
+
+    sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if( sockfd == -1 )
+        error("socket");
 
     if( bind(sockfd, (struct sockaddr *)&name, sizeof(struct sockaddr_un)) == -1 )
         error("bind");
 
     listen(sockfd, 10);
 //------------------------------------------------------------
-    while(1)
-    {
-        data_socket = accept(sockfd, NULL, NULL);
-        if( data_socket == -1 )
-            error("accept");
+    //int socks[20];
 
-        ret = read(data_socket, buffer, BUFFER_SIZE);
-        if(ret==-1)
-            error("read");
-        brigadeId++;
-        printf("From brigade nr: %d, message: %s\n", brigadeId, buffer);
+while(1)
+{
+    registerSocket = accept(sockfd, NULL, NULL);
+    if( registerSocket == -1 )
+        error("accept");
+
+    ret = read(registerSocket, buffer, sizeof(buffer));
+    if(ret==-1)
+        error("read");
+    printf("brygada: %s\n", buffer);
+
+    unlink(buffer);
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(struct sockaddr_un));
+    addr.sun_family = AF_UNIX;
+    strcpy(addr.sun_path, buffer);
+
+    int brygadzistaSock = socket(AF_UNIX, SOCK_STREAM, 0);
+    if( brygadzistaSock == -1)
+        error("brygadzistaSock");
+    if(bind(brygadzistaSock, (struct sockaddr *)&addr, sizeof(struct sockaddr_un)) == -1)
+        error("brygadzistaBind");
+
+   // int workers = buffer;
+   // for(int i = 1; i <= buffer; i++)
+   // {
+   //     char path[20];
+   //     struct sockaddr_un workerAddr;
+   //     memset(&workerAddr, 0, sizeof(struct sockaddr_un));
+   //     workerAddr.sun_family = AF_UNIX;
+   //     sprintf(path, "socket%d", workers--);
+   //     strcpy(workerAddr.sun_path, path);
+   //     socks[i] = socket(AF_UNIX, SOCK_DGRAM, 0);
+   //     unlink(path);
+   //     if(socks[i] == -1)
+   //         error("socks");
+   //     if( bind( socks[i], (struct sockaddr *)&workerAddr, sizeof(struct sockaddr_un)) == -1 )
+   //         error("binds");
+   //     printf("bind with: %s\n", path);
+   // }
+
+   //    // int socksData;
+   //    // socksData = accept(socks[i], NULL, NULL);
+   //    // if(socksData == -1)
+   //    //     error("accepts");
+   // //}
+   // listen(socks[0], 5);
+   // while(1)
+   // {
+   //     for(int i = 1; i <= buffer; i++)
+   //     {
+   //         int socksData = 0;
+   //         socksData = accept(&socks[i], NULL, NULL);
+   //         if(socksData == -1)
+   //             error("accepts");
+   //     }
     }
 
     return 0;
 }
+
