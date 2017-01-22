@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <sys/un.h>
 #include <netinet/udp.h>
-
+#include <poll.h>
 
 void error(const char *msg)
 {
@@ -60,66 +60,83 @@ int main(int argc, char* argv[])
     if( bind(sockfd, (struct sockaddr *)&name, sizeof(struct sockaddr_un)) == -1 )
         error("bind");
 
-    listen(sockfd, 10);
+    listen(sockfd, 5);
+    registerSocket = accept(sockfd, NULL, NULL);
+    if( registerSocket == -1 )
+        error("accept");
+
+    ret = read(registerSocket, buffer, sizeof(buffer));
+    if(ret==-1)
+        error("read");
+    printf("brygada: %s\n", buffer);
+//------------------------------------------------------------
+    unlink(buffer);
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(struct sockaddr_un));
+    addr.sun_family = AF_UNIX;
+    strcpy(addr.sun_path, buffer);
+
+    int brygadzistaSock = socket(AF_UNIX, SOCK_STREAM, 0);
+    if( brygadzistaSock == -1)
+        error("brygadzistaSock");
+
+    if(bind(brygadzistaSock, (struct sockaddr *)&addr, sizeof(struct sockaddr_un)) == -1)
+        error("brygadzistaBind");
+     printf("%s\n", buffer);
+
+    listen(brygadzistaSock, 5);
+
+    int data = accept(brygadzistaSock, NULL, NULL);
+    if( data == -1 )
+        error("accept");
+    int number = 0;
+    read(data, &number, 1);
+    printf("number of workers: %d\n", number);
 //------------------------------------------------------------
     int socks[20];
+    struct pollfd fds[20];
+    fds[0].fd = brygadzistaSock;
+    fds[0].events = POLLIN;
+    fds[0].revents = 0;
+    int res;
+    int workers = number;
+    for(int i = 1; i <= number; i++)
+    {
+//        printf("dupa %d\n", number);
+        char path[20];
+        struct sockaddr_un workerAddr;
+        memset(&workerAddr, 0, sizeof(struct sockaddr_un));
+        workerAddr.sun_family = AF_UNIX;
+        sprintf(path, "socket%d", workers--);
+        strcpy(workerAddr.sun_path, path);
+        socks[i] = socket(AF_UNIX, SOCK_DGRAM, 0);
+        unlink(path);
 
+        if(socks[i] == -1)
+            error("socks");
+        if( bind( socks[i], (struct sockaddr *)&workerAddr, sizeof(struct sockaddr_un)) == -1 )
+            error("binds");
+        printf("bind with: %s\n", path);
+        fds[i].fd = socks[i];
+        fds[i].events = POLLIN;
+        fds[i].revents = 0;
+    }
     while(1)
     {
-        registerSocket = accept(sockfd, NULL, NULL);
-        if( registerSocket == -1 )
-            error("accept");
-
-        ret = read(registerSocket, buffer, sizeof(buffer));
-        if(ret==-1)
-            error("read");
-        printf("brygada: %s\n", buffer);
-
-        unlink(buffer);
-        struct sockaddr_un addr;
-        memset(&addr, 0, sizeof(struct sockaddr_un));
-        addr.sun_family = AF_UNIX;
-        strcpy(addr.sun_path, buffer);
-
-        int brygadzistaSock = socket(AF_UNIX, SOCK_STREAM, 0);
-        if( brygadzistaSock == -1)
-            error("brygadzistaSock");
-        if(bind(brygadzistaSock, (struct sockaddr *)&addr, sizeof(struct sockaddr_un)) == -1)
-            error("brygadzistaBind");
-         printf("%s\n", buffer);
-
-        listen(brygadzistaSock, 5);
-
-        int data = accept(brygadzistaSock, NULL, NULL);
-        if( data == -1 )
-            error("accept");
-        int number = 0;
-        read(data, &number, 1);
-        printf("number of workers: %d\n", number);
-
+        res = poll(fds, number, -1);
         int workers = number;
         for(int i = 1; i <= number; i++)
         {
-            char path[20];
-            struct sockaddr_un workerAddr;
-            memset(&workerAddr, 0, sizeof(struct sockaddr_un));
-            workerAddr.sun_family = AF_UNIX;
-            sprintf(path, "socket%d", workers--);
-            strcpy(workerAddr.sun_path, path);
-            socks[i] = socket(AF_UNIX, SOCK_DGRAM, 0);
-            unlink(path);
-
-            if(socks[i] == -1)
-                error("socks");
-            if( bind( socks[i], (struct sockaddr *)&workerAddr, sizeof(struct sockaddr_un)) == -1 )
-                error("binds");
-            printf("bind with: %s\n", path);
-            char msg[50];
-            if( read(socks[i], msg, 1) == -1 )
-                error("receive");
-            printf("receive: %s\n", msg);
+           // printf("dupa1\n");
+            if(fds[i].revents & POLLIN)
+            {
+                printf("dupa2\n");
+                char msg[40] = {0};
+                if( read(socks[i], msg, 1) == -1 )
+                    error("read");
+                printf("receive: %s from: %d\n", msg, i);
+            }
         }
-
     }
 
     return 0;

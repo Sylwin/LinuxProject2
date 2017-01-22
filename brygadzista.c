@@ -108,7 +108,6 @@ int main(int argc, char* argv[])
         error("socket");
     if(connect(new, (const struct sockaddr *)&brygArch, sizeof(struct sockaddr_un)) == -1)
         error("connect2");
-    int tmp = htonl(numberOfWorkers);
     if( write(new, &numberOfWorkers, 1) == -1 )
         error("write");
 
@@ -128,9 +127,8 @@ int main(int argc, char* argv[])
         if(grp == -1)
             error("setpgrp");
 
-        for(int i = 1; i <= numberOfWorkers; i++)
+        for(int i = numberOfWorkers; i >= 1; i--)
         {
-            //tworzymy robotnikow
             char socket[20];
             sprintf(socket, "-nsocket%d", i);
             char *newArgs[] = { "./robotnik.o", socket, (char *) 0 };

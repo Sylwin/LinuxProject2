@@ -31,9 +31,9 @@ void sigHandler(int sig)
         error("read");
    // printf("Received: %s\n", &buffer);
     clock_gettime(CLOCK_REALTIME, &sendTime);
-    char msg[20];
-    sprintf(msg, "%c %ld.%9ld", buffer, sendTime.tv_sec, sendTime.tv_nsec);
-    printf("%s\n", msg);
+    char msg[40];
+    sprintf(msg, "%c%ld.%9ld", buffer, sendTime.tv_sec, sendTime.tv_nsec);
+    printf("%s:  %s\n", name, msg);
     ret = write(sockfd, msg, sizeof(msg));
     if( ret == -1 )
         error("write");
