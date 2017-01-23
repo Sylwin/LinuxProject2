@@ -11,10 +11,28 @@
 #include <netinet/udp.h>
 #include <poll.h>
 
+struct message
+{
+    char value;
+    long int sec;
+    long int nsec;
+};
+
 void error(const char *msg)
 {
     perror(msg);
     exit(1);
+}
+
+int compare(const void* left, const void* right)
+{
+    struct message l = *((struct message*)left);
+    struct message r = *((struct message*)right);
+    if(l.sec > r.sec) return 1;
+    else if(l.sec < r.sec) return -1;
+    if(l.nsec > r.nsec) return 1;
+    else if(l.nsec < r.nsec) return -1;
+    return 0;
 }
 
 int main(int argc, char* argv[])
@@ -82,7 +100,7 @@ int main(int argc, char* argv[])
 
     if(bind(brygadzistaSock, (struct sockaddr *)&addr, sizeof(struct sockaddr_un)) == -1)
         error("brygadzistaBind");
-     printf("%s\n", buffer);
+//    printf("%s\n", buffer);
 
     listen(brygadzistaSock, 5);
 
@@ -100,7 +118,7 @@ int main(int argc, char* argv[])
     fds[0].revents = 0;
     int res;
     int workers = number;
-    for(int i = 1; i <= number; i++)
+    for(int i = 0; i < number; i++)
     {
 //        printf("dupa %d\n", number);
         char path[20];
@@ -121,23 +139,51 @@ int main(int argc, char* argv[])
         fds[i].events = POLLIN;
         fds[i].revents = 0;
     }
+    int z = 0;
+    char *Message = malloc(number*sizeof(char));
+    memset(Message, 0, number*sizeof(char));
+    struct message *ms = malloc(sizeof(struct message)*number);
+    int len = strlen(buffer);
+    printf("buffer: %d\n", len);
     while(1)
     {
         res = poll(fds, number, -1);
-        int workers = number;
-        for(int i = 1; i <= number; i++)
+        for(int i = 0; i < number; i++)
         {
-           // printf("dupa1\n");
+            //printf("dupa1\n");
             if(fds[i].revents & POLLIN)
             {
-                printf("dupa2\n");
-                char msg[40] = {0};
-                if( read(socks[i], msg, 1) == -1 )
+                char msg[40];
+                if( read(socks[i], msg, sizeof(msg)) == -1 )
                     error("read");
-                printf("receive: %s from: %d\n", msg, i);
+                if(strlen(msg) != 0)
+                {
+                    printf("receive: %s\n", msg);
+                    ms[z].value = msg[0];
+                    char *second;
+                    ms[z].sec = strtol(msg+1, &second, 10);
+                    ms[z].nsec = strtol(second+1, NULL, 10);
+                    z++;
+                    //printf("%d\n", z);
+                }
             }
+            else if( (fds[i].revents & POLLNVAL) & (fds[i].revents & POLLERR) & (fds[i].revents & POLLHUP) )
+                break;
+        }
+
+        if( z == len )
+        {
+            //printf("lol");
+            qsort(ms, z, sizeof(struct message), compare);
+            for( int i = 0; i < z; i++ )
+            {
+                Message[i] = ms[i].value;
+            }
+            printf("msg: %s\n", Message);
+            z=0;
         }
     }
+    free(ms);
 
     return 0;
 }

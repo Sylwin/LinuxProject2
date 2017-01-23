@@ -29,12 +29,12 @@ void sigHandler(int sig)
     char buffer;
     if( read(0, &buffer, 1) == -1 )
         error("read");
-   // printf("Received: %s\n", &buffer);
+    //printf("Received: %s\n", &buffer);
     clock_gettime(CLOCK_REALTIME, &sendTime);
     char msg[40];
     sprintf(msg, "%c%ld.%9ld", buffer, sendTime.tv_sec, sendTime.tv_nsec);
     printf("%s:  %s\n", name, msg);
-    ret = write(sockfd, msg, sizeof(msg));
+    ret = write(sockfd, &msg, sizeof(msg)+1);
     if( ret == -1 )
         error("write");
 }

@@ -93,7 +93,7 @@ int main(int argc, char* argv[])
     if(ret == -1)
         error("connect1");
 
-    ret = write(sockfd, id, sizeof(id)+1);
+    ret = write(sockfd, message, sizeof(id)+1);
     if(ret==-1)
         error("write");
     close(sockfd);
@@ -101,8 +101,8 @@ int main(int argc, char* argv[])
     struct sockaddr_un brygArch;
     memset(&brygArch, 0, sizeof(struct sockaddr_un));
     brygArch.sun_family = AF_UNIX;
-    strcpy(brygArch.sun_path, id);
-    printf("brygada id: %s\n", id);
+    strcpy(brygArch.sun_path, message);
+    printf("brygada id: %s\n", message);
     int new = socket(AF_UNIX, SOCK_STREAM, 0);
     if(new == -1)
         error("socket");
@@ -145,6 +145,7 @@ int main(int argc, char* argv[])
     else
     {
         printf("brygadzista pid: %d\n", getpid());
+        printf("message: %s\n", message);
         write(fd[1], message, sizeof(message)+1);
     }
 //----------------------------------------------------
