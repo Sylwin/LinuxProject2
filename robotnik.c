@@ -63,8 +63,6 @@ int main(int argc, char* argv[])
     if( sigaction(SIGALRM, &sa, NULL) == -1 )
         perror("sigaction");
 
-    printf("socket name: %s\n", name);
-
     struct sockaddr_un address;
     memset(&address, 0, sizeof(struct sockaddr_un));
 

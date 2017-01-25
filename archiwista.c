@@ -10,6 +10,7 @@
 #include <sys/un.h>
 #include <netinet/udp.h>
 #include <poll.h>
+#include <openssl/md5.h>
 
 struct message
 {
@@ -86,8 +87,11 @@ int main(int argc, char* argv[])
     ret = read(registerSocket, buffer, sizeof(buffer));
     if(ret==-1)
         error("read");
-    printf("brygada: %s\n", buffer);
+
+    int len = strlen(buffer);
+
 //------------------------------------------------------------
+    char receiveMD5sum[100];
     unlink(buffer);
     struct sockaddr_un addr;
     memset(&addr, 0, sizeof(struct sockaddr_un));
@@ -100,17 +104,24 @@ int main(int argc, char* argv[])
 
     if(bind(brygadzistaSock, (struct sockaddr *)&addr, sizeof(struct sockaddr_un)) == -1)
         error("brygadzistaBind");
-//    printf("%s\n", buffer);
 
     listen(brygadzistaSock, 5);
 
     int data = accept(brygadzistaSock, NULL, NULL);
     if( data == -1 )
         error("accept");
+
     int number = 0;
-    read(data, &number, 1);
-    printf("number of workers: %d\n", number);
+    read(data, receiveMD5sum, sizeof(receiveMD5sum));
+    //printf("md5sum: %s\n", receiveMD5sum);
+    number = receiveMD5sum[0];
+    //printf("number: %c\n", number);
+    char md5sum[100];
+    strcpy(md5sum, receiveMD5sum + 1 );
+    //printf("md5sum: %s\n",md5sum);
+
 //------------------------------------------------------------
+
     int socks[20];
     struct pollfd fds[20];
     fds[0].fd = brygadzistaSock;
@@ -120,7 +131,6 @@ int main(int argc, char* argv[])
     int workers = number;
     for(int i = 0; i < number; i++)
     {
-//        printf("dupa %d\n", number);
         char path[20];
         struct sockaddr_un workerAddr;
         memset(&workerAddr, 0, sizeof(struct sockaddr_un));
@@ -134,7 +144,7 @@ int main(int argc, char* argv[])
             error("socks");
         if( bind( socks[i], (struct sockaddr *)&workerAddr, sizeof(struct sockaddr_un)) == -1 )
             error("binds");
-        printf("bind with: %s\n", path);
+
         fds[i].fd = socks[i];
         fds[i].events = POLLIN;
         fds[i].revents = 0;
@@ -143,14 +153,12 @@ int main(int argc, char* argv[])
     char *Message = malloc(number*sizeof(char));
     memset(Message, 0, number*sizeof(char));
     struct message *ms = malloc(sizeof(struct message)*number);
-    int len = strlen(buffer);
-    printf("buffer: %d\n", len);
+
     while(1)
     {
         res = poll(fds, number, -1);
         for(int i = 0; i < number; i++)
         {
-            //printf("dupa1\n");
             if(fds[i].revents & POLLIN)
             {
                 char msg[40];
@@ -158,13 +166,12 @@ int main(int argc, char* argv[])
                     error("read");
                 if(strlen(msg) != 0)
                 {
-                    printf("receive: %s\n", msg);
+                    //printf("receive: %s\n", msg);
                     ms[z].value = msg[0];
                     char *second;
                     ms[z].sec = strtol(msg+1, &second, 10);
                     ms[z].nsec = strtol(second+1, NULL, 10);
                     z++;
-                    //printf("%d\n", z);
                 }
             }
             else if( (fds[i].revents & POLLNVAL) & (fds[i].revents & POLLERR) & (fds[i].revents & POLLHUP) )
@@ -173,17 +180,26 @@ int main(int argc, char* argv[])
 
         if( z == len )
         {
-            //printf("lol");
             qsort(ms, z, sizeof(struct message), compare);
             for( int i = 0; i < z; i++ )
             {
                 Message[i] = ms[i].value;
             }
-            printf("msg: %s\n", Message);
+            printf("get message: %s\n", Message);
             z=0;
+            char out[MD5_DIGEST_LENGTH];
+            char *res = MD5(Message, strlen(Message), out);
+            char *newMd5sum = malloc(100);
+            memset(newMd5sum,0,100);
+            for(int n=0; n<MD5_DIGEST_LENGTH; n++)
+                sprintf(newMd5sum,"%s%02x",newMd5sum,  out[n]);
+            //printf("md5sum: %s\n", newMd5sum);
+            if( strcmp(md5sum,newMd5sum) == 0 )
+                printf("message is correct!\n");
+            else
+                printf("Something went wrong!\n");
         }
     }
-    free(ms);
 
     return 0;
 }

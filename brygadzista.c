@@ -14,6 +14,7 @@
 #include <math.h>
 #include <sys/un.h>
 #include <signal.h>
+#include <openssl/md5.h>
 
 int numberOfWorkers;
 char message[50];
@@ -98,18 +99,30 @@ int main(int argc, char* argv[])
         error("write");
     close(sockfd);
 //----------------------------------------------------
+    char out[MD5_DIGEST_LENGTH];
+    char *res = MD5(message, strlen(message), out);
+    char *md5sum = malloc(100);
+    memset(md5sum,0,100);
+    for(int n=0; n<MD5_DIGEST_LENGTH; n++)
+        sprintf(md5sum,"%s%02x",md5sum,  out[n]);
+
+    //printf("md5sum: %s\n", md5sum);
+
     struct sockaddr_un brygArch;
     memset(&brygArch, 0, sizeof(struct sockaddr_un));
     brygArch.sun_family = AF_UNIX;
     strcpy(brygArch.sun_path, message);
-    printf("brygada id: %s\n", message);
     int new = socket(AF_UNIX, SOCK_STREAM, 0);
     if(new == -1)
         error("socket");
     if(connect(new, (const struct sockaddr *)&brygArch, sizeof(struct sockaddr_un)) == -1)
         error("connect2");
-    if( write(new, &numberOfWorkers, 1) == -1 )
-        error("write");
+
+    char ss[100];
+    sprintf(ss,"%d%s", numberOfWorkers, md5sum);
+    //printf("md5sum: %s\n", ss);
+    if( write(new, ss, sizeof(ss)) == -1 )
+        error("write1");
 
 //----------------------------------------------------
 
@@ -117,7 +130,7 @@ int main(int argc, char* argv[])
     pipe(fd);
 
     groupLeaderPID = fork();
-    printf("groupLeader PID: %d\n", groupLeaderPID);
+    //printf("groupLeader PID: %d\n", groupLeaderPID);
 
     if(groupLeaderPID == -1)
         error("fork1");
@@ -144,7 +157,7 @@ int main(int argc, char* argv[])
     }
     else
     {
-        printf("brygadzista pid: %d\n", getpid());
+        //printf("brygadzista pid: %d\n", getpid());
         printf("message: %s\n", message);
         write(fd[1], message, sizeof(message)+1);
     }
