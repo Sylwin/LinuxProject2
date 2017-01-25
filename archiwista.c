@@ -12,18 +12,18 @@
 #include <poll.h>
 #include <openssl/md5.h>
 
+void error(const char *msg)
+{
+    perror(msg);
+    exit(1);
+}
+
 struct message
 {
     char value;
     long int sec;
     long int nsec;
 };
-
-void error(const char *msg)
-{
-    perror(msg);
-    exit(1);
-}
 
 int compare(const void* left, const void* right)
 {
@@ -44,6 +44,10 @@ int main(int argc, char* argv[])
     char registerChannelName[50];
     int registerSocket;
     int ret;
+    struct sockaddr_un name;
+    struct sockaddr_un addr;
+    int len = 0;
+    char receiveMD5sum[100];
 
     while( (opt = getopt(argc, argv, "a:")) != -1 )
     {
@@ -66,7 +70,6 @@ int main(int argc, char* argv[])
     }
 //------------------------------------------------------------
     unlink(registerChannelName);
-    struct sockaddr_un name;
     memset(&name, 0, sizeof(struct sockaddr_un));
 
     name.sun_family = AF_UNIX;
@@ -88,12 +91,10 @@ int main(int argc, char* argv[])
     if(ret==-1)
         error("read");
 
-    int len = strlen(buffer);
+    len = strlen(buffer);
 
 //------------------------------------------------------------
-    char receiveMD5sum[100];
     unlink(buffer);
-    struct sockaddr_un addr;
     memset(&addr, 0, sizeof(struct sockaddr_un));
     addr.sun_family = AF_UNIX;
     strcpy(addr.sun_path, buffer);
@@ -111,11 +112,11 @@ int main(int argc, char* argv[])
     if( data == -1 )
         error("accept");
 
-    int number = 0;
     read(data, receiveMD5sum, sizeof(receiveMD5sum));
     //printf("md5sum: %s\n", receiveMD5sum);
-    number = receiveMD5sum[0];
-    //printf("number: %c\n", number);
+    int number = 0;
+    number = receiveMD5sum[0] - '0';
+    //printf("number: %d\n", number);
     char md5sum[100];
     strcpy(md5sum, receiveMD5sum + 1 );
     //printf("md5sum: %s\n",md5sum);
